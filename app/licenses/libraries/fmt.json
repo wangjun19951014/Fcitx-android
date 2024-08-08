@@ -1,0 +1,11 @@
+{
+    "uniqueId": "fmtlib/fmt",
+    "artifactVersion": "9.1.0",
+    "description": "Open-source formatting library for C++",
+    "name": "fmtlib/fmt",
+    "website": "https://fmt.dev",
+    "tag": "native",
+    "licenses": [
+        "MIT"
+    ]
+}

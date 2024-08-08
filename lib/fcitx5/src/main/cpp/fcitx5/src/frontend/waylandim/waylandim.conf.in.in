@@ -1,0 +1,11 @@
+[Addon]
+Name=Wayland Input method frontend
+Type=SharedLibrary
+Library=libwaylandim
+Category=Frontend
+Version=@PROJECT_VERSION@
+Configurable=True
+
+[Addon/Dependencies]
+0=wayland:@PROJECT_VERSION@
+
