@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsResponse
@@ -82,6 +83,7 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
     }
 
     var currentVirtualDisplayId : Int = IMXRImeBinder.MXR_IME_INVALID_DISPLAY_ID
+    private var displayContext : Context? = null
     var imeDisplayShowing: Boolean = false
     var imeWindowShowing: Boolean = false
 
@@ -98,8 +100,18 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
     private fun recreateInputView(theme: Theme) {
         // InputView should be created first in onCreateInputView
         // setInputView should be used to 'replace' current InputView only
-        InputView(service, fcitx, theme).also {
-            inputView = it
+        if (service.enableSystemInput) {
+            InputView(service, fcitx, theme, service).also {
+                inputView = it
+            }
+        } else {
+            if (displayContext != null) {
+                InputView(service, fcitx, theme, displayContext!!).also {
+                    inputView = it
+                }
+            } else{
+                Timber.e("recreateInputView fail, current displayContext is null")
+            }
         }
     }
 
@@ -121,7 +133,7 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
 
     fun handleOnCrate() {
         if (!service.enableSystemInput) {
-            Timber.tag(TAG).d("connect mxrImeClientManager")
+            Timber.d("connect mxrImeClientManager")
             mxrImeClientManager = MXRImeClientManager(service, this)
             mxrImeClientManager.connectXRContainer()
         }
@@ -146,10 +158,9 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
             }
         }
 
-        inputView = InputView(service, fcitx, ThemeManager.activeTheme)
 
-        if (!service.enableSystemInput) {
-            inputView!!.setViewTreeLifecycleOwner(service)
+        if (service.enableSystemInput) {
+            inputView = InputView(service, fcitx, ThemeManager.activeTheme, service)
         }
     }
 
@@ -473,35 +484,25 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
     }
 
     private class InputViewHelper(
-        val service: FcitxInputMethodService,
         val bridge: FcitxInputMethodServiceBridge) {
 
-        private var displayContext: Context? = null
+        private var context: Context? = null
         private var view: View? = null
-        private lateinit var mDialog: Dialog
-        private lateinit var mRootView: View
 
-        fun showInputView(displayId :Int) {
-            val dm = service.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-            val targetDisplay = dm.getDisplay(displayId)
-            Timber.tag(TAG).d("showInputView current display $displayId")
-            if (targetDisplay == null) {
-                Timber.e("showInputView: current Ime display is null")
-                return
-            }
-            displayContext = service.createDisplayContext(targetDisplay)
+        fun showInputView(displayContext: Context) {
+            context = displayContext;
             removeInputView()
             addInputView(false)
         }
 
 
         fun removeInputView() {
-            if (view != null && displayContext != null) {
+            if (view != null && context != null) {
                 Timber.tag(TAG).d("removeInputView")
-                val wm = displayContext?.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                val wm = context?.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 wm.removeView(view)
                 view = null
-                displayContext = null
+                context = null
             }
         }
 
@@ -513,7 +514,7 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
             lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
             lp.gravity = Gravity.BOTTOM;
             lp.flags = if (focusable) VIEW_FLAG_FOCUSABLE else VIEW_FLAG_NOT_FOCUSABLE
-            val wm = displayContext?.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val wm = context?.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             wm.addView(bridge.inputView, lp)
 
             if (focusable) {
@@ -551,23 +552,59 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
         }
         // because onStartInputView will always be called after onStartInput,
         // editorInfo and capFlags should be up-to-date
-        inputView?.startInput(info, capabilityFlags, restarting)
+        if (service.enableSystemInput) {
+            inputView?.startInput(info, capabilityFlags, restarting)
 
+        } else {
+            if (inputView == null) {
+                if(currentVirtualDisplayId == IMXRImeBinder.MXR_IME_INVALID_DISPLAY_ID) {
+                    currentVirtualDisplayId = mxrImeClientManager.getImeDisplay();
+                    if (currentVirtualDisplayId == IMXRImeBinder.MXR_IME_INVALID_DISPLAY_ID) {
+                        Timber.e("XRContainer Service IME display not created")
+                        return
+                    }
+                }
 
-        if (!service.enableSystemInput) {
-            if(currentVirtualDisplayId == IMXRImeBinder.MXR_IME_INVALID_DISPLAY_ID) {
-                currentVirtualDisplayId = mxrImeClientManager.getImeDisplay();
-                if (currentVirtualDisplayId == IMXRImeBinder.MXR_IME_INVALID_DISPLAY_ID) return
+                if (!createDisplayContext(currentVirtualDisplayId)) {
+                    Timber.e("Can't create context from VirtualDisplay")
+                    return
+                }
+
+                if (displayContext == null) {
+                    Timber.e("create display context failed")
+                    return
+                }
+                /**
+                 * When enableSystemInput is false, use the display created by XRContainer to play input view,
+                 * so the input View need use display context to init view.
+                 * Created input View When first call of handleOnStartInputView in this way.
+                 */
+                inputView = InputView(service, fcitx, ThemeManager.activeTheme, displayContext!!)
+                inputView!!.setViewTreeLifecycleOwner(service)
+
             }
 
+            inputView?.startInput(info, capabilityFlags, restarting)
+
             Timber.tag(TAG).d("Will show inputView id: $currentVirtualDisplayId")
-            inputViewHelper  = InputViewHelper(service, this)
-            inputViewHelper!!.showInputView(currentVirtualDisplayId)
-            inputView!!.visibility  = View.VISIBLE
+            inputViewHelper  = InputViewHelper(this)
+            inputViewHelper?.showInputView(displayContext!!)
+            inputView?.visibility  = View.VISIBLE
             imeWindowShowing = true
             mxrImeClientManager.sendClientWindowStatus(imeWindowShowing)
-
         }
+    }
+
+    private fun  createDisplayContext(displayId: Int) : Boolean{
+        val dm = service.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val targetDisplay = dm.getDisplay(displayId)
+        Timber.d("showInputView current display $displayId")
+        if (targetDisplay == null) {
+            Timber.e("showInputView: current Ime display is null")
+            return false
+        }
+        displayContext = service.createDisplayContext(targetDisplay)
+        return true
     }
 
     fun handleOnUpdateSelection(
@@ -745,8 +782,17 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
         FcitxDaemon.disconnect(javaClass.name)
     }
 
+    /**
+     * Only called by onCreateInputView  when enableSystemInput is true
+     */
     fun handleOnCreateInputView() :InputView{
         return inputView!!
+    }
+
+    fun handleOnRemoveVirtualDisplay() {
+        Timber.i("handleOnRemoveVirtualDisplay, delete inputView and displayContext")
+        inputView = null
+        displayContext = null
     }
 
     companion object {

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:sharedUserId="android.uid.system">
 
     <!-- remove unused permission from AppCompat -->
     <permission
@@ -22,6 +23,7 @@
         android:protectionLevel="signature" />
 
     <uses-permission android:name="${applicationId}.permission.PLUGIN" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".FcitxApplication"
@@ -34,11 +36,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FcitxAppTheme"
         tools:targetApi="34">
-        <service
-            android:name=".input.XRInputManagerService"
-            android:enabled="true"
-            android:exported="true"></service>
-
         <activity
             android:name=".ui.setup.SetupActivity"
             android:exported="false"
