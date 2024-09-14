@@ -6,6 +6,7 @@ package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
@@ -74,13 +75,15 @@ import splitties.views.dsl.core.view
 import splitties.views.dsl.core.withTheme
 import splitties.views.dsl.core.wrapContent
 import splitties.views.imageDrawable
+import timber.log.Timber
 
 @SuppressLint("ViewConstructor")
 class InputView(
     val service: FcitxInputMethodService,
     val fcitx: FcitxConnection,
-    val theme: Theme
-) : ConstraintLayout(service) {
+    val theme: Theme,
+    val displayContext : Context
+) : ConstraintLayout(displayContext) {
 
     private var shouldUpdateNavbarForeground = false
     private var shouldUpdateNavbarBackground = false
@@ -167,11 +170,21 @@ class InputView(
 
     private val keyboardHeightPx: Int
         get() {
-            val percent = when (resources.configuration.orientation) {
-                Configuration.ORIENTATION_LANDSCAPE -> keyboardHeightPercentLandscape
-                else -> keyboardHeightPercent
-            }.getValue()
-            return resources.displayMetrics.heightPixels * percent / 100
+            if(service.enableSystemInput) {
+                val percent = when (resources.configuration.orientation) {
+                    Configuration.ORIENTATION_LANDSCAPE -> keyboardHeightPercentLandscape
+                    else -> keyboardHeightPercent
+                 }.getValue()
+                return resources.displayMetrics.heightPixels * percent / 100
+            }else {
+                /**
+                 * InputView.height = keyboardHeightPx + kawaiiBar.view.height(35dp) + preedit.ui.root.height(34dp)
+                 * So, the keyboardHeightPx value ≈ displayHeight - 70dp
+                 */
+                val  value = (resources.displayMetrics.heightPixels - 70 * resources.displayMetrics.density).toInt()
+                Timber.d("Create keyboard view:  keyboardHeightPx $value")
+                return value
+            }
         }
 
     private val keyboardSidePaddingPx: Int
@@ -225,40 +238,41 @@ class InputView(
         windowManager.addEssentialWindow(emoticonPicker)
 
         broadcaster.onImeUpdate(fcitx.runImmediately { inputMethodEntryCached })
-
-        service.window.window!!.also {
-            when (navbarBackground) {
-                NavbarBackground.None -> {
-                    WindowCompat.setDecorFitsSystemWindows(it, true)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        it.isNavigationBarContrastEnforced = true
-                    }
-                }
-                NavbarBackground.ColorOnly -> {
-                    shouldUpdateNavbarForeground = true
-                    shouldUpdateNavbarBackground = true
-                    WindowCompat.setDecorFitsSystemWindows(it, true)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        it.isNavigationBarContrastEnforced = false
-                    }
-                }
-                NavbarBackground.Full -> {
-                    shouldUpdateNavbarForeground = true
-                    // allow draw behind navigation bar
-                    WindowCompat.setDecorFitsSystemWindows(it, false)
-                    // transparent navigation bar
-                    it.navigationBarColor = Color.TRANSPARENT
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        // don't apply scrim to transparent navigation bar
-                        it.isNavigationBarContrastEnforced = false
-                    }
-                    ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-                        insets.getInsets(WindowInsetsCompat.Type.navigationBars()).let {
-                            bottomPaddingSpace.updateLayoutParams<LayoutParams> {
-                                bottomMargin = it.bottom
-                            }
+        if (service.enableSystemInput) {
+            service.window.window!!.also {
+                when (navbarBackground) {
+                    NavbarBackground.None -> {
+                        WindowCompat.setDecorFitsSystemWindows(it, true)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            it.isNavigationBarContrastEnforced = true
                         }
-                        WindowInsetsCompat.CONSUMED
+                    }
+                    NavbarBackground.ColorOnly -> {
+                        shouldUpdateNavbarForeground = true
+                        shouldUpdateNavbarBackground = true
+                        WindowCompat.setDecorFitsSystemWindows(it, true)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            it.isNavigationBarContrastEnforced = false
+                        }
+                    }
+                    NavbarBackground.Full -> {
+                        shouldUpdateNavbarForeground = true
+                        // allow draw behind navigation bar
+                        WindowCompat.setDecorFitsSystemWindows(it, false)
+                        // transparent navigation bar
+                        it.navigationBarColor = Color.TRANSPARENT
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            // don't apply scrim to transparent navigation bar
+                            it.isNavigationBarContrastEnforced = false
+                        }
+                        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+                            insets.getInsets(WindowInsetsCompat.Type.navigationBars()).let {
+                                bottomPaddingSpace.updateLayoutParams<LayoutParams> {
+                                    bottomMargin = it.bottom
+                                }
+                            }
+                            WindowInsetsCompat.CONSUMED
+                        }
                     }
                 }
             }
