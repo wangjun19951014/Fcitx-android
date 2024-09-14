@@ -351,6 +351,7 @@ void InstancePrivate::buildDefaultGroup() {
 
     // Figure out the first available default input method.
     std::string defaultIM;
+    std::string defaultPinyin;
     for (const auto &im : defaultIMConfig.defaultInputMethods.value()) {
         if (imManager_.entry(im)) {
             defaultIM = im;
@@ -358,6 +359,15 @@ void InstancePrivate::buildDefaultGroup() {
         }
     }
 
+    if (!defaultIM.empty()) {
+        if (defaultIM != "pinyin") {
+            FCITX_INFO()<< "defaultIM exist, set defaultPinyin";
+            defaultPinyin = "pinyin";
+        }
+    } else {
+        FCITX_INFO()<< "defaultIM is null, set defaultIM: pinyin";
+        defaultIM = "pinyin";
+    }
     // Create a group for each layout.
     std::vector<std::string> groupOrders;
     for (const auto &imLayout : imLayouts) {
@@ -375,6 +385,11 @@ void InstancePrivate::buildDefaultGroup() {
         if (!defaultIM.empty()) {
             group.inputMethodList().emplace_back(
                 InputMethodGroupItem(defaultIM));
+        }
+
+        if (!defaultPinyin.empty()) {
+            group.inputMethodList().emplace_back(
+                    InputMethodGroupItem(defaultPinyin));
         }
         FCITX_INFO() << "Items in " << groupName << ": "
                      << group.inputMethodList();

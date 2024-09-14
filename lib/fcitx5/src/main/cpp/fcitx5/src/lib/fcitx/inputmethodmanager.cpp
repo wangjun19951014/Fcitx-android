@@ -155,6 +155,9 @@ void InputMethodManagerPrivate::buildDefaultGroup(
         auto &group = result.first->second;
         group.inputMethodList().emplace_back(
             InputMethodGroupItem("keyboard-us"));
+        //Set pinyin for default IME
+        group.inputMethodList().emplace_back(
+                InputMethodGroupItem("pinyin"));
         group.setDefaultInputMethod("");
         group.setDefaultLayout("us");
         setGroupOrder({std::move(name)});
