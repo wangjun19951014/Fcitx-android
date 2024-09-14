@@ -5,6 +5,7 @@
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
@@ -13,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.text.InputType
+import android.util.Log
 import android.util.LruCache
 import android.util.Size
 import android.view.KeyCharacterMap
@@ -115,6 +117,41 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private val onThemeChangeListener = ThemeManager.OnThemeChangeListener {
         recreateInputView(it)
     }
+    var currentContext: Context? = null
+    fun setContext(context: Context) {
+        currentContext = context
+    }
+
+    fun start() : View {
+        Timber.tag(TAG).d("start")
+        fcitx = FcitxDaemon.connect(javaClass.name)
+        lifecycleScope.launch {
+            jobs.consumeEach { it.join() }
+        }
+        lifecycleScope.launch {
+            fcitx.runImmediately { eventFlow }.collect {
+                handleFcitxEvent(it)
+            }
+        }
+        pkgNameCache = PackageNameCache(this)
+        AppPrefs.getInstance().apply {
+            keyboard.expandKeypressArea.registerOnChangeListener(recreateInputViewListener)
+            advanced.disableAnimation.registerOnChangeListener(recreateInputViewListener)
+        }
+        ThemeManager.addOnChangedListener(onThemeChangeListener)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            postFcitxJob {
+                SubtypeManager.syncWith(enabledIme())
+            }
+        }
+
+
+
+
+        return InputView(this, fcitx, ThemeManager.activeTheme).also {
+            inputView = it
+        }
+    }
 
     private fun recreateInputView(theme: Theme) {
         // InputView should be created first in onCreateInputView
@@ -142,6 +179,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         postJob(fcitx.lifecycleScope) { fcitx.runOnReady(block) }
 
     override fun onCreate() {
+        Timber.tag(TAG).d("onCreate")
         fcitx = FcitxDaemon.connect(javaClass.name)
         lifecycleScope.launch {
             jobs.consumeEach { it.join() }
@@ -181,10 +219,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 } else {
                     // KeyEvent from physical keyboard (or input method engine forwardKey)
                     // use cached event if available
-                    cachedKeyEvents.remove(it.timestamp)?.let { keyEvent ->
-                        currentInputConnection?.sendKeyEvent(keyEvent)
-                        return@event
-                    }
+//                    cachedKeyEvents.remove(it.timestamp)?.let { keyEvent ->
+//                        currentInputConnection?.sendKeyEvent(keyEvent)
+//                        return@event
+//                    }
                     // simulate key event
                     val keyCode = it.sym.keyCode
                     if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
@@ -218,7 +256,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                     val subtype = SubtypeManager.subtypeOf(im) ?: return
                     skipNextSubtypeChange = im
                     // [^1]: notify system that input method subtype has changed
-                    switchInputMethod(InputMethodUtil.componentName, subtype)
+                    //TODO 检查是否需要通知系统
+//                    switchInputMethod(InputMethodUtil.componentName, subtype)
                 }
             }
             else -> {}
@@ -226,15 +265,15 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     private fun handleDeleteSurrounding(before: Int, after: Int) {
-        val ic = currentInputConnection ?: return
-        if (before > 0) {
-            selection.predictOffset(-before)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ic.deleteSurroundingTextInCodePoints(before, after)
-        } else {
-            ic.deleteSurroundingText(before, after)
-        }
+//        val ic = currentInputConnection ?: return
+//        if (before > 0) {
+//            selection.predictOffset(-before)
+//        }
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//            ic.deleteSurroundingTextInCodePoints(before, after)
+//        } else {
+//            ic.deleteSurroundingText(before, after)
+//        }
     }
 
     private fun handleBackspaceKey() {
@@ -244,66 +283,63 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         } else if (lastSelection.start > 0) {
             selection.predictOffset(-1)
         }
+        //TODO 根据InputConnection来发送KEYCODE_DEL，后续实现也需要根据currentInputEditorInfo来获取相应的信息
+        sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+
         // In practice nobody (apart form ourselves) would set `privateImeOptions` to our
         // `DeleteSurroundingFlag`, leading to a behavior of simulating backspace key pressing
         // in almost every EditText.
-        if (currentInputEditorInfo.privateImeOptions != DeleteSurroundingFlag ||
-            currentInputEditorInfo.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL
-        ) {
-            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
-            return
-        }
-        if (lastSelection.isEmpty()) {
-            if (lastSelection.start <= 0) {
-                sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
-                return
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                currentInputConnection.deleteSurroundingTextInCodePoints(1, 0)
-            } else {
-                currentInputConnection.deleteSurroundingText(1, 0)
-            }
-        } else {
-            currentInputConnection.commitText("", 0)
-        }
+//        if (currentInputEditorInfo.privateImeOptions != DeleteSurroundingFlag ||
+//            currentInputEditorInfo.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL
+//        ) {
+//            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+//            return
+//        }
+//        if (lastSelection.isEmpty()) {
+//            if (lastSelection.start <= 0) {
+//                sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+//                return
+//            }
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//                currentInputConnection.deleteSurroundingTextInCodePoints(1, 0)
+//            } else {
+//                currentInputConnection.deleteSurroundingText(1, 0)
+//            }
+//        } else {
+//            currentInputConnection.commitText("", 0)
+//        }
     }
 
     private fun handleReturnKey() {
-        currentInputEditorInfo.run {
-            if (inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL) {
-                sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-                return
-            }
-            if (imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_ENTER_ACTION)) {
-                commitText("\n")
-                return
-            }
-            if (actionLabel?.isNotEmpty() == true && actionId != EditorInfo.IME_ACTION_UNSPECIFIED) {
-                currentInputConnection.performEditorAction(actionId)
-                return
-            }
-            when (val action = imeOptions and EditorInfo.IME_MASK_ACTION) {
-                EditorInfo.IME_ACTION_UNSPECIFIED,
-                EditorInfo.IME_ACTION_NONE -> commitText("\n")
-                else -> currentInputConnection.performEditorAction(action)
-            }
-        }
+//        currentInputEditorInfo.run {
+//            if (inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL) {
+//                sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
+//                return
+//            }
+//            if (imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_ENTER_ACTION)) {
+//                commitText("\n")
+//                return
+//            }
+//            if (actionLabel?.isNotEmpty() == true && actionId != EditorInfo.IME_ACTION_UNSPECIFIED) {
+//                currentInputConnection.performEditorAction(actionId)
+//                return
+//            }
+//            when (val action = imeOptions and EditorInfo.IME_MASK_ACTION) {
+//                EditorInfo.IME_ACTION_UNSPECIFIED,
+//                EditorInfo.IME_ACTION_NONE -> commitText("\n")
+//                else -> currentInputConnection.performEditorAction(action)
+//            }
+//        }
     }
 
     fun commitText(text: String, cursor: Int = -1) {
-        val ic = currentInputConnection ?: return
         // when composing text equals commit content, finish composing text as-is
         if (composing.isNotEmpty() && composingText.toString() == text) {
             val c = if (cursor == -1) text.length else cursor
             val target = composing.start + c
             resetComposingState()
-            ic.withBatchEdit {
-                if (selection.current.start != target) {
-                    selection.predict(target)
-                    ic.setSelection(target, target)
-                }
-                ic.finishComposingText()
-            }
+            selection.predict(target)
+            //TODO  If need add set selection method to InputConnect
             return
         }
         // committed text should replace composing (if any), replace selected range (if any),
@@ -312,54 +348,91 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         resetComposingState()
         if (cursor == -1) {
             selection.predict(start + text.length)
-            ic.commitText(text, 1)
+            Timber.tag(TAG).d("current text: $text")
+            //TODO  If need add set selection method  and commit text  to InputConnect
         } else {
             val target = start + cursor
             selection.predict(target)
-            ic.withBatchEdit {
-                commitText(text, 1)
-                setSelection(target, target)
-            }
+            Timber.tag(TAG).d("current text: $text")
+            //TODO  If need add set selection method  and commit text  to InputConnect
         }
+
+
+
+//        val ic = currentInputConnection ?: return
+//        // when composing text equals commit content, finish composing text as-is
+//        if (composing.isNotEmpty() && composingText.toString() == text) {
+//            val c = if (cursor == -1) text.length else cursor
+//            val target = composing.start + c
+//            resetComposingState()
+//            ic.withBatchEdit {
+//                if (selection.current.start != target) {
+//                    selection.predict(target)
+//                    ic.setSelection(target, target)
+//                }
+//                ic.finishComposingText()
+//            }
+//            return
+//        }
+//        // committed text should replace composing (if any), replace selected range (if any),
+//        // or simply prepend before cursor
+//        val start = if (composing.isEmpty()) selection.latest.start else composing.start
+//        resetComposingState()
+//        if (cursor == -1) {
+//            selection.predict(start + text.length)
+//            ic.commitText(text, 1)
+//        } else {
+//            val target = start + cursor
+//            selection.predict(target)
+//            ic.withBatchEdit {
+//                commitText(text, 1)
+//                setSelection(target, target)
+//            }
+//        }
     }
 
     private fun sendDownKeyEvent(eventTime: Long, keyEventCode: Int, metaState: Int = 0) {
-        currentInputConnection?.sendKeyEvent(
-            KeyEvent(
-                eventTime,
-                eventTime,
-                KeyEvent.ACTION_DOWN,
-                keyEventCode,
-                0,
-                metaState,
-                KeyCharacterMap.VIRTUAL_KEYBOARD,
-                0,
-                KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
-            )
-        )
+        //TODO 通过View 模拟下发按键事件
+        Timber.tag(TAG).d("sendDown key code=$keyEventCode")
+//        currentInputConnection?.sendKeyEvent(
+//            KeyEvent(
+//                eventTime,
+//                eventTime,
+//                KeyEvent.ACTION_DOWN,
+//                keyEventCode,
+//                0,
+//                metaState,
+//                KeyCharacterMap.VIRTUAL_KEYBOARD,
+//                0,
+//                KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
+//            )
+//        )
     }
 
     private fun sendUpKeyEvent(eventTime: Long, keyEventCode: Int, metaState: Int = 0) {
-        currentInputConnection?.sendKeyEvent(
-            KeyEvent(
-                eventTime,
-                SystemClock.uptimeMillis(),
-                KeyEvent.ACTION_UP,
-                keyEventCode,
-                0,
-                metaState,
-                KeyCharacterMap.VIRTUAL_KEYBOARD,
-                0,
-                KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
-            )
-        )
+        //TODO 通过View 模拟下发按键事件
+        Timber.tag(TAG).d("sendUp key code=$keyEventCode")
+//        currentInputConnection?.sendKeyEvent(
+//            KeyEvent(
+//                eventTime,
+//                SystemClock.uptimeMillis(),
+//                KeyEvent.ACTION_UP,
+//                keyEventCode,
+//                0,
+//                metaState,
+//                KeyCharacterMap.VIRTUAL_KEYBOARD,
+//                0,
+//                KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
+//            )
+//        )
     }
 
     fun deleteSelection() {
         val lastSelection = selection.latest
         if (lastSelection.isEmpty()) return
         selection.predict(lastSelection.start)
-        currentInputConnection?.commitText("", 1)
+        //TODO 通过XRInputService的InputConnect下发上述信息
+//        currentInputConnection?.commitText("", 1)
     }
 
     fun sendCombinationKeyEvents(
@@ -385,13 +458,20 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     fun applySelectionOffset(offsetStart: Int, offsetEnd: Int = 0) {
         val lastSelection = selection.latest
-        currentInputConnection?.also {
-            val start = max(lastSelection.start + offsetStart, 0)
-            val end = max(lastSelection.end + offsetEnd, 0)
-            if (start > end) return
-            selection.predict(start, end)
-            it.setSelection(start, end)
-        }
+        //TODO InputConect 相关的功能移动至XRInputService
+        val start = max(lastSelection.start + offsetStart, 0)
+        val end = max(lastSelection.end + offsetEnd, 0)
+        if (start > end) return
+        selection.predict(start, end)
+
+
+//        currentInputConnection?.also {
+//            val start = max(lastSelection.start + offsetStart, 0)
+//            val end = max(lastSelection.end + offsetEnd, 0)
+//            if (start > end) return
+//            selection.predict(start, end)
+//            it.setSelection(start, end)
+//        }
     }
 
     fun cancelSelection() {
@@ -399,20 +479,24 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         if (lastSelection.isEmpty()) return
         val end = lastSelection.end
         selection.predict(end)
-        currentInputConnection?.setSelection(end, end)
+        //TODO 移动InputConnection到XRInputService
+//        currentInputConnection?.setSelection(end, end)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
+        Timber.tag(TAG).d("onConfigurationChanged")
         super.onConfigurationChanged(newConfig)
         postFcitxJob { reset() }
     }
 
     override fun onWindowShown() {
+        Timber.tag(TAG).d("onWindowShown")
         super.onWindowShown()
         InputFeedbacks.syncSystemPrefs()
     }
 
     override fun onCreateInputView(): View {
+        Timber.tag(TAG).d("onCreateInputView")
         // onCreateInputView will be called once, when the input area is first displayed,
         // during each onConfigurationChanged period.
         // That is, onCreateInputView would be called again, after system dark mode changes,
@@ -423,6 +507,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun setInputView(view: View) {
+        Timber.tag(TAG).d("setInputView")
         try {
             highlightColor = view.styledColor(android.R.attr.colorAccent).alpha(0.4f)
         } catch (e: Exception) {
@@ -440,10 +525,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onConfigureWindow(win: Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
+        Timber.tag(TAG).d("onConfigureWindow")
         win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onComputeInsets(outInsets: Insets) {
+        Timber.tag(TAG).d("onComputeInsets")
         val (_, y) = intArrayOf(0, 0).also { inputView?.keyboardView?.getLocationInWindow(it) }
         outInsets.apply {
             contentTopInsets = y
@@ -489,16 +576,19 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        Timber.tag(TAG).d("onKeyDown")
         return forwardKeyEvent(event) || super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        Timber.tag(TAG).d("onKeyUp")
         return forwardKeyEvent(event) || super.onKeyUp(keyCode, event)
     }
 
     private var firstBindInput = true
 
     override fun onBindInput() {
+        Timber.tag(TAG).d("onBindInput")
         val uid = currentInputBinding.uid
         val pkgName = pkgNameCache.forUid(uid)
         Timber.d("onBindInput: uid=$uid pkg=$pkgName")
@@ -533,6 +623,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private var skipNextSubtypeChange: String? = null
 
     override fun onCurrentInputMethodSubtypeChanged(newSubtype: InputMethodSubtype) {
+        Timber.tag(TAG).d("onCurrentInputMethodSubtypeChanged")
         super.onCurrentInputMethodSubtypeChanged(newSubtype)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val im = SubtypeManager.inputMethodOf(newSubtype)
@@ -550,6 +641,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onStartInput(attribute: EditorInfo, restarting: Boolean) {
+        Timber.tag(TAG).d("onStartInput")
         // update selection as soon as possible
         // sometimes when restarting input, onUpdateSelection happens before onStartInput, and
         // initialSel{Start,End} is outdated. but it's the client app's responsibility to send
@@ -574,6 +666,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
+        Timber.tag(TAG).d("onStartInputView")
         Timber.d("onStartInputView: restarting=$restarting")
         postFcitxJob {
             focus(true)
@@ -591,6 +684,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         candidatesStart: Int,
         candidatesEnd: Int
     ) {
+        Timber.tag(TAG).d("onUpdateSelection")
         // onUpdateSelection can left behind when user types quickly enough, eg. long press backspace
         cursorUpdateIndex += 1
         Timber.d("onUpdateSelection: old=[$oldSelStart,$oldSelEnd] new=[$newSelStart,$newSelEnd]")
@@ -599,10 +693,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onUpdateCursorAnchorInfo(info: CursorAnchorInfo) {
+        Timber.tag(TAG).d("onUpdateCursorAnchorInfo")
         // CursorAnchorInfo focus more on screen coordinates rather than selection
     }
 
-    private fun handleCursorUpdate(newSelStart: Int, newSelEnd: Int, updateIndex: Int) {
+    private fun handleCursorUpdate(
+        newSelStart: Int, newSelEnd: Int, updateIndex: Int) {
         if (selection.consume(newSelStart, newSelEnd)) {
             return // do nothing if prediction matches
         } else {
@@ -640,7 +736,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             Timber.d("handleCursorUpdate: focus out/in")
             resetComposingState()
             // cursor outside composing range, finish composing as-is
-            currentInputConnection?.finishComposingText()
+            //TODO  将InputConnect相关的功能移动至XRInputService
+//            currentInputConnection?.finishComposingText()
             // `fcitx.reset()` here would commit preedit after new cursor position
             // since we have `ClientUnfocusCommit`, focus out and in would do the trick
             postFcitxJob {
@@ -656,9 +753,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     // because of https://android.googlesource.com/platform/frameworks/base.git/+/refs/tags/android-11.0.0_r45/core/java/android/view/inputmethod/BaseInputConnection.java#851
     // it's not possible to set cursor inside composing text
     private fun updateComposingText(text: FormattedText) {
-        val ic = currentInputConnection ?: return
+
+        //TODO 在每个if else模块中添加向InputConnection提交文本的功能
         val lastSelection = selection.latest
-        ic.beginBatchEdit()
         if (!composingText.spanEquals(text)) {
             // composing text content changed
             Timber.d("updateComposingText: '$text' lastSelection=$lastSelection")
@@ -673,7 +770,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                     selection.predict(composing.start)
                     composing.clear()
                 }
-                ic.setComposingText("", 1)
             } else {
                 val start = if (composing.isEmpty()) lastSelection.start else composing.start
                 composing.update(start, start + text.length)
@@ -682,12 +778,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 // - cursor position is invalid
                 if (text.cursor == text.length || text.cursor < 0) {
                     selection.predict(composing.end)
-                    ic.setComposingText(text.toSpannedString(highlightColor), 1)
                 } else {
                     val p = text.cursor + composing.start
                     selection.predict(p)
-                    ic.setComposingText(text.toSpannedString(highlightColor), 1)
-                    ic.setSelection(p, p)
                 }
             }
             Timber.d("updateComposingText: composing=$composing")
@@ -698,13 +791,62 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 val p = text.cursor + composing.start
                 if (p != lastSelection.start) {
                     Timber.d("updateComposingText: set Android selection ($p, $p)")
-                    ic.setSelection(p, p)
                     selection.predict(p)
                 }
             }
         }
         composingText = text
-        ic.endBatchEdit()
+
+
+//        val ic = currentInputConnection ?: return
+//        val lastSelection = selection.latest
+//        ic.beginBatchEdit()
+//        if (!composingText.spanEquals(text)) {
+//            // composing text content changed
+//            Timber.d("updateComposingText: '$text' lastSelection=$lastSelection")
+//            if (text.isEmpty()) {
+//                if (composing.isEmpty()) {
+//                    // do not reset saved selection range when incoming composing
+//                    // and saved composing range are both empty:
+//                    // composing.start is invalid when it's empty.
+//                    selection.predict(lastSelection.start)
+//                } else {
+//                    // clear composing text, put cursor at start of original composing
+//                    selection.predict(composing.start)
+//                    composing.clear()
+//                }
+//                ic.setComposingText("", 1)
+//            } else {
+//                val start = if (composing.isEmpty()) lastSelection.start else composing.start
+//                composing.update(start, start + text.length)
+//                // skip cursor reposition when:
+//                // - preedit cursor is at the end
+//                // - cursor position is invalid
+//                if (text.cursor == text.length || text.cursor < 0) {
+//                    selection.predict(composing.end)
+//                    ic.setComposingText(text.toSpannedString(highlightColor), 1)
+//                } else {
+//                    val p = text.cursor + composing.start
+//                    selection.predict(p)
+//                    ic.setComposingText(text.toSpannedString(highlightColor), 1)
+//                    ic.setSelection(p, p)
+//                }
+//            }
+//            Timber.d("updateComposingText: composing=$composing")
+//        } else {
+//            // composing text content is up-to-date
+//            // update cursor only when it's not empty AND cursor position is valid
+//            if (text.length > 0 && text.cursor >= 0) {
+//                val p = text.cursor + composing.start
+//                if (p != lastSelection.start) {
+//                    Timber.d("updateComposingText: set Android selection ($p, $p)")
+//                    ic.setSelection(p, p)
+//                    selection.predict(p)
+//                }
+//            }
+//        }
+//        composingText = text
+//        ic.endBatchEdit()
     }
 
     /**
@@ -712,11 +854,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
      * Also updates internal composing state of [FcitxInputMethodService].
      */
     fun finishComposing() {
-        val ic = currentInputConnection ?: return
+//        val ic = currentInputConnection ?: return
         if (composing.isEmpty()) return
         composing.clear()
         composingText = FormattedText.Empty
-        ic.finishComposingText()
+        //TODO  将InputConnect相关的功能移动至XRInputService
+//        ic.finishComposingText()
     }
 
     @SuppressLint("RestrictedApi")
@@ -819,6 +962,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onDestroy() {
+        Timber.tag(TAG).d("onDestroy")
         AppPrefs.getInstance().apply {
             keyboard.expandKeypressArea.unregisterOnChangeListener(recreateInputViewListener)
             advanced.disableAnimation.unregisterOnChangeListener(recreateInputViewListener)
@@ -831,6 +975,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     companion object {
         const val DeleteSurroundingFlag = "org.fcitx.fcitx5.android.DELETE_SURROUNDING"
+        private const val TAG = "XRFcitxInputMethodService"
     }
 
 }

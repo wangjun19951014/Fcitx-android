@@ -10,26 +10,13 @@
     <uses-permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         tools:node="remove" />
-
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- remove intent queries merged from library manifest (namely Android-Image-Cropper) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> <!-- remove intent queries merged from library manifest (namely Android-Image-Cropper) -->
     <queries tools:node="removeAll" />
-
-    <queries>
-        <intent>
-            <action android:name="${applicationId}.plugin.MANIFEST" />
-        </intent>
-        <intent>
-            <action android:name="android.view.InputMethod" />
-        </intent>
-    </queries>
 
     <permission
         android:name="${applicationId}.permission.IPC"
         android:protectionLevel="signature" />
-
     <permission
         android:name="${applicationId}.permission.PLUGIN"
         android:protectionLevel="signature" />
@@ -47,6 +34,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FcitxAppTheme"
         tools:targetApi="34">
+        <service
+            android:name=".input.XRInputManagerService"
+            android:enabled="true"
+            android:exported="true"></service>
+
         <activity
             android:name=".ui.setup.SetupActivity"
             android:exported="false"
@@ -61,8 +53,7 @@
             android:name=".ui.main.settings.theme.CustomThemeActivity"
             android:configChanges="orientation|screenSize"
             android:exported="false"
-            android:label="@string/edit_theme" />
-        <!-- don't export CropImageActivity -->
+            android:label="@string/edit_theme" /> <!-- don't export CropImageActivity -->
         <activity
             android:name="com.canhub.cropper.CropImageActivity"
             android:exported="false"
@@ -104,7 +95,6 @@
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.txt" />
             </intent-filter>
         </activity>
-
         <activity
             android:name=".ui.main.ClipboardEditActivity"
             android:autoRemoveFromRecents="true"
@@ -130,7 +120,6 @@
                 android:name="android.view.im"
                 android:resource="@xml/input_method" />
         </service>
-
         <service
             android:name=".FcitxRemoteService"
             android:exported="true"
@@ -151,7 +140,6 @@
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
         </provider>
-
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -159,6 +147,7 @@
             android:exported="false"
             tools:ignore="MissingClass"
             tools:node="merge">
+
             <!-- do not inject splitties AppCompat -->
             <meta-data
                 android:name="splitties.views.dsl.appcompat.experimental.AppCompatViewInstantiatorInjecter"
