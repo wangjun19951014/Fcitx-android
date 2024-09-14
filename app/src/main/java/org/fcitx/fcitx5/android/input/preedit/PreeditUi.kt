@@ -23,11 +23,13 @@ import splitties.views.backgroundColor
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.lParams
+import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.verticalLayout
+import splitties.views.dsl.core.wrapContent
 import splitties.views.horizontalPadding
 
-class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
+class PreeditUi(override val ctx: Context, private val theme: Theme, private val enableSystemInput: Boolean) : Ui {
 
     class CursorSpan(ctx: Context, @ColorInt color: Int, metrics: Paint.FontMetricsInt) :
         DynamicDrawableSpan() {
@@ -54,7 +56,7 @@ class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
         backgroundColor = barBackground
         horizontalPadding = dp(8)
         setTextColor(theme.keyTextColor)
-        textSize = 16f
+        textSize = 12f
     }
 
     private val upView = createTextView()
@@ -65,10 +67,16 @@ class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
         private set
 
     override val root: View = verticalLayout {
-        alpha = 0.8f
-        visibility = View.INVISIBLE
-        add(upView, lParams())
-        add(downView, lParams())
+////Ensure the textView  Visible： change2
+        if (enableSystemInput) {
+            alpha = 0.8f
+            add(upView, lParams())
+            add(downView, lParams())
+        } else {
+            visibility = View.VISIBLE
+            add(upView, lParams(matchParent, wrapContent))
+            add(downView, lParams(matchParent, wrapContent))
+        }
     }
 
     private fun updateTextView(view: TextView, str: CharSequence, visible: Boolean) = view.run {
@@ -76,7 +84,12 @@ class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
             text = str
             if (visibility == View.GONE) visibility = View.VISIBLE
         } else if (visibility != View.GONE) {
-            visibility = View.GONE
+//Ensure the textView  Visible： change3
+            if (enableSystemInput) {
+                visibility = View.GONE
+            } else {
+                visibility = View.VISIBLE
+            }
         }
     }
 

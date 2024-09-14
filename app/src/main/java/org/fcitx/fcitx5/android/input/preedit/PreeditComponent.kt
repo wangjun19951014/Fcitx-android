@@ -8,6 +8,7 @@ import android.view.View
 import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.dependency.context
+import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
 import org.mechdancer.dependency.Dependent
 import org.mechdancer.dependency.UniqueComponent
@@ -19,11 +20,16 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
 
     private val context by manager.context()
     private val theme by manager.theme()
+    private val service by manager.inputMethodService()
 
-    val ui by lazy { PreeditUi(context, theme) }
+    val ui by lazy { PreeditUi(context, theme, service.enableSystemInput) }
 
     override fun onInputPanelUpdate(data: FcitxEvent.InputPanelEvent.Data) {
         ui.update(data)
-        ui.root.visibility = if (ui.visible) View.VISIBLE else View.INVISIBLE
+        if (service.enableSystemInput) {
+            ui.root.visibility = if (ui.visible) View.VISIBLE else View.INVISIBLE
+        } else {
+            ui.root.visibility = View.VISIBLE
+        }
     }
 }

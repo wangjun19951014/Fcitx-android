@@ -49,7 +49,11 @@ class PopupComponent :
         context.dp(38)
     }
     private val popupHeight by lazy {
-        context.dp(116)
+        if (service.enableSystemInput) {
+            context.dp(116)
+        } else {
+            context.dp(50)
+        }
     }
     private val popupKeyHeight by lazy {
         context.dp(48)
