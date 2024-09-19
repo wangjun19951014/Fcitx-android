@@ -9,9 +9,11 @@ import android.app.Dialog
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Outline
 import android.os.Build
 import android.view.View
 import android.view.View.OnClickListener
+import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsResponse
@@ -369,6 +371,20 @@ class InputView(
         }
         preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
         kawaiiBar.view.setPadding(sidePadding, 0, sidePadding, 0)
+
+        this.clipToOutline = true
+        this.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View?, outline: Outline?) {
+                var left : Int = 0
+                var top : Int = 0
+                var right = view?.width
+                var bottom = view?.height
+                var corner : Float = 20.0f
+                outline?.setRoundRect(left, top, right!! , bottom!!, corner)
+
+            }
+
+        }
     }
 
     /**

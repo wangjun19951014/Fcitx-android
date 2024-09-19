@@ -68,13 +68,12 @@ class PreeditUi(override val ctx: Context, private val theme: Theme, private val
         private set
 
     override val root: View = verticalLayout {
-////Ensure the textView  Visible： change2
         if (enableSystemInput) {
             alpha = 0.8f
             add(upView, lParams())
             add(downView, lParams())
         } else {
-            visibility = View.VISIBLE
+            visibility = View.GONE
             add(upView, lParams(matchParent, wrapContent))
             add(downView, lParams(matchParent, wrapContent))
         }
@@ -85,13 +84,8 @@ class PreeditUi(override val ctx: Context, private val theme: Theme, private val
             text = str
             if (visibility == View.GONE) visibility = View.VISIBLE
         } else if (visibility != View.GONE) {
-//Ensure the textView  Visible： change3
             text = str
-            visibility = if (enableSystemInput) {
-                View.GONE
-            } else {
-                View.VISIBLE
-            }
+            visibility = View.GONE
         }
     }
 
@@ -116,12 +110,9 @@ class PreeditUi(override val ctx: Context, private val theme: Theme, private val
         val hasUp = upString.isNotEmpty()
         val hasDown = downString.isNotEmpty()
 
-        if (enableSystemInput) {
-            visible = hasUp || hasDown
-            if (!visible) return
-        } else {
-            visible = true
-        }
+        visible = hasUp || hasDown
+        if (!visible) return
+
         val upStringWithCursor = if (upCursor < 0 || upCursor == upString.length) {
             upString
         } else buildSpannedString {

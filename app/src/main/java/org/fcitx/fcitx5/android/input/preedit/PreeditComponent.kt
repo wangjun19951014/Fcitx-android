@@ -29,7 +29,7 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
         if (service.enableSystemInput) {
             ui.root.visibility = if (ui.visible) View.VISIBLE else View.INVISIBLE
         } else {
-            ui.root.visibility = View.VISIBLE
+            ui.root.visibility = if (ui.visible) View.VISIBLE else View.GONE
         }
     }
 }
