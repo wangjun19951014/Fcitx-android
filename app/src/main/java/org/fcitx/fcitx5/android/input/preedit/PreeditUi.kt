@@ -28,6 +28,7 @@ import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.verticalLayout
 import splitties.views.dsl.core.wrapContent
 import splitties.views.horizontalPadding
+import timber.log.Timber
 
 class PreeditUi(override val ctx: Context, private val theme: Theme, private val enableSystemInput: Boolean) : Ui {
 
@@ -85,10 +86,11 @@ class PreeditUi(override val ctx: Context, private val theme: Theme, private val
             if (visibility == View.GONE) visibility = View.VISIBLE
         } else if (visibility != View.GONE) {
 //Ensure the textView  Visible： change3
-            if (enableSystemInput) {
-                visibility = View.GONE
+            text = str
+            visibility = if (enableSystemInput) {
+                View.GONE
             } else {
-                visibility = View.VISIBLE
+                View.VISIBLE
             }
         }
     }
@@ -113,8 +115,13 @@ class PreeditUi(override val ctx: Context, private val theme: Theme, private val
         val downString = inputPanel.auxDown.toSpannedString(bkgColor)
         val hasUp = upString.isNotEmpty()
         val hasDown = downString.isNotEmpty()
-        visible = hasUp || hasDown
-        if (!visible) return
+
+        if (enableSystemInput) {
+            visible = hasUp || hasDown
+            if (!visible) return
+        } else {
+            visible = true
+        }
         val upStringWithCursor = if (upCursor < 0 || upCursor == upString.length) {
             upString
         } else buildSpannedString {
