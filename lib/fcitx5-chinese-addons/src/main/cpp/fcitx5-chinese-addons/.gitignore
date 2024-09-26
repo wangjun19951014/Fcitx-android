@@ -1,5 +1,7 @@
 build*/
-.*
+.clang-format
+.codedocs
+.formatignore
 !.git*
 .git/
 *.tar.*

@@ -1,7 +1,10 @@
 build*/
-.*
 !.git*
 .git/
+.clang-format
+.codedocs
+.formatignore
+.reuse/
 *.tar.*
 *.kdev4
 *.kate-swp
