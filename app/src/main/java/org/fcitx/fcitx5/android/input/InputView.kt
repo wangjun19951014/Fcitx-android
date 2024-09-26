@@ -31,6 +31,9 @@ import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.CapabilityFlags
 import org.fcitx.fcitx5.android.core.FcitxEvent
+import org.fcitx.fcitx5.android.core.FcitxEvent.CandidateListEvent
+import org.fcitx.fcitx5.android.core.FcitxEvent.InputPanelEvent
+import org.fcitx.fcitx5.android.core.FormattedText
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
@@ -469,6 +472,29 @@ class InputView(
      */
     fun finishInput() {
         showingDialog?.dismiss()
+
+        /**
+         * Clear the CandidateList and Preedit UI after finishInputView.
+         * Compatible input method to quickly switch between two application panels.
+         */
+        handleFcitxEvent(
+            CandidateListEvent(
+                CandidateListEvent.Data(
+                    0,
+                    emptyArray()
+                )
+            )
+        )
+
+        handleFcitxEvent(
+            InputPanelEvent(
+                InputPanelEvent.Data(
+                    FormattedText(arrayOf(), intArrayOf(), -1),
+                    FormattedText(arrayOf(), intArrayOf(), -1),
+                    FormattedText(arrayOf(), intArrayOf(), -1)
+                )
+            )
+        )
     }
 
     @RequiresApi(Build.VERSION_CODES.R)

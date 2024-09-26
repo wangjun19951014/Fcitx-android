@@ -226,6 +226,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         return false
     }
 
+    fun dealCachedKeyEvent(timestamp: Int) : Boolean {
+        cachedKeyEvents.remove(timestamp)?.let { keyEvent ->
+            currentInputConnection?.sendKeyEvent(keyEvent)
+            return true
+        }
+        return false
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         Timber.tag(TAG).d("onKeyDown")
         return forwardKeyEvent(event) || super.onKeyDown(keyCode, event)

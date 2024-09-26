@@ -1,6 +1,5 @@
 package org.fcitx.fcitx5.android.input
 
-import android.app.Dialog
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.inputmethodservice.InputMethodService
@@ -8,11 +7,11 @@ import android.inputmethodservice.InputMethodService.Insets
 import android.os.Build
 import android.os.SystemClock
 import android.text.InputType
+import android.view.Display
 import android.view.Gravity
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.View
-import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsResponse
@@ -47,7 +46,6 @@ import org.fcitx.fcitx5.android.utils.inputMethodManager
 import org.fcitx.fcitx5.android.utils.withBatchEdit
 import splitties.bitflags.hasFlag
 import timber.log.Timber
-import java.sql.Time
 import kotlin.math.max
 
 class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
@@ -180,10 +178,9 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
                 } else {
                     // KeyEvent from physical keyboard (or input method engine forwardKey)
                     // use cached event if available
-//                    cachedKeyEvents.remove(it.timestamp)?.let { keyEvent ->
-//                        currentInputConnection?.sendKeyEvent(keyEvent)
-//                        return@event
-//                    }
+                    if (service.dealCachedKeyEvent(it.timestamp)) {
+                        return@event
+                    }
                     // simulate key event
                     val keyCode = it.sym.keyCode
                     if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
@@ -491,14 +488,12 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
 
         fun showInputView(displayContext: Context) {
             context = displayContext;
-            removeInputView()
             addInputView(false)
         }
 
-
         fun removeInputView() {
             if (view != null && context != null) {
-                Timber.tag(TAG).d("removeInputView")
+                Timber.d("will removeInputView")
                 val wm = context?.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 wm.removeView(view)
                 view = null
@@ -507,6 +502,7 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
         }
 
         fun addInputView(focusable: Boolean) {
+            Timber.d("addInputView: class: ${this.hashCode()}")
             view = bridge.inputView
             val lp = WindowManager.LayoutParams()
             lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -539,11 +535,6 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
         }
     }
 
-
-
-
-
-
     @RequiresApi(Build.VERSION_CODES.Q)
     fun handleOnStartInputView(info: EditorInfo, restarting: Boolean) {
         Timber.d("onStartInputView: restarting=$restarting")
@@ -565,6 +556,15 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
                     }
                 }
 
+                //The TestCode for add inputView to extern DP
+//                var disM :DisplayManager = service.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+//                val displays: Array<Display> = disM.getDisplays()
+//                for (display in displays) {
+//                   if (display.displayId != 0 && display.displayId != 2) {
+//                       currentVirtualDisplayId = display.displayId
+//                   }
+//                }
+
                 if (!createDisplayContext(currentVirtualDisplayId)) {
                     Timber.e("Can't create context from VirtualDisplay")
                     return
@@ -582,13 +582,12 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
                 inputView = InputView(service, fcitx, ThemeManager.activeTheme, displayContext!!)
                 inputView!!.setViewTreeLifecycleOwner(service)
 
+                Timber.tag(TAG).d("Will show inputView on display: $currentVirtualDisplayId")
+                inputViewHelper  = InputViewHelper(this)
+                inputViewHelper?.showInputView(displayContext!!)
             }
 
             inputView?.startInput(info, capabilityFlags, restarting)
-
-            Timber.tag(TAG).d("Will show inputView id: $currentVirtualDisplayId")
-            inputViewHelper  = InputViewHelper(this)
-            inputViewHelper?.showInputView(displayContext!!)
             inputView?.visibility  = View.VISIBLE
             imeWindowShowing = true
             mxrImeClientManager.sendClientWindowStatus(imeWindowShowing)
@@ -598,7 +597,6 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
     private fun  createDisplayContext(displayId: Int) : Boolean{
         val dm = service.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val targetDisplay = dm.getDisplay(displayId)
-        Timber.d("showInputView current display $displayId")
         if (targetDisplay == null) {
             Timber.e("showInputView: current Ime display is null")
             return false
@@ -724,6 +722,7 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
     }
 
     fun finishComposing() {
+        Timber.d("finishComposing ")
         val ic = service.currentInputConnection ?: return
         if (composing.isEmpty()) return
         composing.clear()
@@ -747,9 +746,8 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
         inputView?.finishInput()
         if (!service.enableSystemInput) {
             if (imeWindowShowing) {
-                Timber.d("onFinishInputView, will remove")
+                Timber.d("onFinishInputView, will hidden inputView")
                 inputView?.visibility = View.GONE
-                inputViewHelper?.removeInputView()
                 imeWindowShowing = false
                 mxrImeClientManager.sendClientWindowStatus(imeWindowShowing)
             }
@@ -771,6 +769,7 @@ class FcitxInputMethodServiceBridge (val service: FcitxInputMethodService){
 
     fun handleOnDestroy() {
         if (!service.enableSystemInput) {
+            inputViewHelper?.removeInputView()
             mxrImeClientManager.destroy()
         }
         AppPrefs.getInstance().apply {

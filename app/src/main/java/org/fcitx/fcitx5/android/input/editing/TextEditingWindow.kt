@@ -94,7 +94,7 @@ class TextEditingWindow : InputWindow.ExtendedInputWindow<TextEditingWindow>(),
     override fun onCreateView(): View = ui.root
 
     override fun onAttached() {
-        val range = service.currentInputSelection
+        val range = service.getCurrentInputSelection()
         onSelectionUpdate(range.start, range.end)
     }
 
