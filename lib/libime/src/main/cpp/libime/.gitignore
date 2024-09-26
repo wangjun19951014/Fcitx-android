@@ -1,0 +1,5 @@
+*.kdev4
+*~
+test/bench.cpp
+test/cedarpp.h
+*.tar.*
