@@ -477,24 +477,26 @@ class InputView(
          * Clear the CandidateList and Preedit UI after finishInputView.
          * Compatible input method to quickly switch between two application panels.
          */
-        handleFcitxEvent(
-            CandidateListEvent(
-                CandidateListEvent.Data(
-                    0,
-                    emptyArray()
+        if (!service.enableSystemInput) {
+            handleFcitxEvent(
+                CandidateListEvent(
+                    CandidateListEvent.Data(
+                        0,
+                        emptyArray()
+                    )
                 )
             )
-        )
 
-        handleFcitxEvent(
-            InputPanelEvent(
-                InputPanelEvent.Data(
-                    FormattedText(arrayOf(), intArrayOf(), -1),
-                    FormattedText(arrayOf(), intArrayOf(), -1),
-                    FormattedText(arrayOf(), intArrayOf(), -1)
+            handleFcitxEvent(
+                InputPanelEvent(
+                    InputPanelEvent.Data(
+                        FormattedText(arrayOf(), intArrayOf(), -1),
+                        FormattedText(arrayOf(), intArrayOf(), -1),
+                        FormattedText(arrayOf(), intArrayOf(), -1)
+                    )
                 )
             )
-        )
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
