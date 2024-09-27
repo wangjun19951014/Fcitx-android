@@ -154,6 +154,9 @@ abstract class KeyView(ctx: Context, val theme: Theme, val def: KeyDef.Appearanc
                     // use mask drawable as highlight directly
                     mask ?: highlightMaskDrawable(theme.keyPressHighlightColor)
                 )
+
+                addState(intArrayOf(android.R.attr.state_hovered),
+                    mask?: highlightMaskDrawable(theme.keyPressHighlightColor))
             }
         }
     }

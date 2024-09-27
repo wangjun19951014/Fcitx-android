@@ -137,6 +137,19 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
         // double tap state should be preserved on touch up
     }
 
+    override fun onHoverEvent(event: MotionEvent?): Boolean {
+        when(event?.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER -> {
+               isHovered = true
+            }
+            MotionEvent.ACTION_HOVER_EXIT-> {
+                isHovered = false
+            }
+
+        }
+        return super.onHoverEvent(event)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val x = event.x
